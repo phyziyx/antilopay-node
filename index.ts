@@ -1,15 +1,29 @@
-// Antilopay Payment Processor SDK
-// A TypeScript first implementation of the Antilopay Payment Processor SDK.
-// This SDK is designed to be used in Node.js (or equivalent environments) only.
+/**
+ * Antilopay Payment Processor Node.js SDK
+ * @module antilopay-node
+ * @version 0.0.0
+ * @author phyziyx
+ * @license MIT
+ *
+ * This SDK is designed to be used in Node.js (or equivalent environments) only.
+ * It is not designed to be used in the browser or in a webview.
+ *
+ * The SDK is designed to be used with the Antilopay Payment Processor.
+ * The API documentation can be found at https://doc.antilopay.com/AntilopayAPI.pdf
+ */
 
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import crypto from "crypto";
 
 //
 //
-// Interfaces
+// Interfaces and Types
 //
 //
+
+type AntilopayPaymentMethod = "CARD_RU" | "SBP" | "SBER_PAY";
+type AntilopayPaymentCurrency = "RUB";
+type AntilopayProductType = "goods" | "services";
 
 interface IAntilopayServiceConstructor {
   projectId: string;
@@ -17,6 +31,123 @@ interface IAntilopayServiceConstructor {
   secretKey: string;
   publicKey: string;
 }
+
+interface IAntilopayPaymentIntent {
+  /**
+   * The project identifier for the payment.
+   * @required
+   */
+  project_identifier: string;
+  /**
+   * The payment amount in your currency.
+   * The amount must be a positive number.
+   * Two decimal places are allowed.
+   * @required
+   */
+  amount: number;
+  /**
+   * The order identifier for the payment.
+   * The order identifier must be unique for each payment.
+   * @required
+   */
+  order_id: string;
+  /**
+   * The amount currency for the payment.
+   * @required
+   */
+  currency: AntilopayPaymentCurrency;
+  /**
+   * The name of the product or service being purchased.
+   * This is used for display purposes only and does not affect the payment.
+   * @required
+   */
+  product_name: string;
+  /**
+   * The type of product or service being purchased.
+   * @required
+   */
+  product_type: AntilopayProductType;
+  /**
+   * The quantity of the product or service being purchased.
+   * Minimum value is 1.
+   * @optional
+   * @default 1
+   */
+  product_quantity?: number;
+  /**
+   * The VAT rate for the payment.
+   * Seems to be in %, such as 10, 20 etc.
+   * Mandatory if the merchant's tax system is OSNO.
+   * @optional
+   * @default 0
+   */
+  vat?: number;
+  /**
+   * The payment description.
+   * This is used for display purposes only and does not affect the payment.
+   * @required
+   */
+  description: string;
+  /**
+   * The URL to redirect the user to after the payment is completed successfully.
+   * @optional
+   */
+  success_url?: string;
+  /**
+   * The URL to redirect the user to after the payment is cancelled or failed.
+   * @optional
+   */
+  fail_url?: string;
+  /**
+   * Customer's details
+   */
+  customer: AntilopayCustomer;
+  /**
+   * The payment method to use for the payment.
+   * This is a list of payment methods that are supported by Antilopay.
+   * @optional
+   */
+  prefer_methods?: AntilopayPaymentMethod[];
+  /**
+   * Merchant's technical information, maximum 255 characters.
+   * @optional
+   */
+  merchant_extra?: string;
+  /**
+   * Additional parameters for the payment.
+   * @optional
+   */
+  params?: IAntilopayPaymentIntentParams;
+}
+
+interface IAntilopayPaymentIntentParams {
+  direct_nspk: boolean;
+}
+
+interface IAntilopayPaymentIntentResponse {
+  /**
+   * The error code for the payment.
+   * 0 - success
+   * anything else - error
+   */
+  code: number;
+  payment_id: string;
+  payment_url: string;
+  error: string;
+}
+
+type AntilopayPaymentIntentResponsePlain = IAntilopayPaymentIntentResponse & {
+  direct_nspk: false;
+};
+
+type IAntilopayPaymentIntentResponseNSPK = IAntilopayPaymentIntentResponse & {
+  direct_nspk: true;
+  transaction_id: string;
+};
+
+type AntilopayPaymentIntentResponse =
+  | AntilopayPaymentIntentResponsePlain
+  | IAntilopayPaymentIntentResponseNSPK;
 
 interface IAntilopayCustomer {
   email: string;
@@ -46,16 +177,32 @@ export class AntilopayCustomer implements IAntilopayCustomer {
     ipAddress,
     fullName,
   }: IAntilopayCustomer) {
+    if (!email && !phone) {
+      throw new Error("Either email or phone must be provided.");
+    }
+
     this.email = email;
     this.phone = phone;
     this.address = address;
     this.ipAddress = ipAddress;
     this.fullName = fullName;
   }
+
+  public toJSON() {
+    return {
+      email: this.email,
+      phone: this.phone,
+      address: this.address,
+      ip: this.ipAddress,
+      fullname: this.fullName,
+    };
+  }
 }
 
 export class AntilopayService {
   private static instance: AntilopayService | null = null;
+
+  private axiosClient: AxiosInstance | null = null;
 
   /**
    * The base URL for the Antilopay API.
@@ -196,38 +343,58 @@ export class AntilopayService {
     return {
       "X-Apay-Secret-Id": this.projectId,
       "X-Apay-Sign-Version": this.apiVersion.toString(),
-      "X-Apay-Sign": this.generateSignature("TODO"),
+      "X-Apay-Sign": this.generateSignature({}),
     };
   }
 
   /**
    * Generate the signature for the API request.
    * This is used to authenticate the request with the Antilopay API.
-   * @param payload The payload to sign, must be a stringified JSON object.
+   * @param payload The payload to sign, must a JSON object.
    * @returns The signature for the API request.
    */
-  private generateSignature(payload: string): string {
+  private generateSignature(payload: object): string {
+    const data = JSON.stringify(payload);
+
     const sign = crypto.createSign(this.signingAlgorithm);
-    sign.update(payload);
-    return sign.sign(this.secretKey, this.signingAlgorithmOutput);
+    sign.update(data);
+    sign.end();
+
+    const signature = sign.sign(this.secretKey, this.signingAlgorithmOutput);
+    return signature;
+  }
+
+  // TODO:
+  // - Implement the POST /signature/check endpoint
+  // - Takes in an arbitrary JSON object and returns
+  // { "status": "ok" } - if successful
+  // { "code": 3, "error": "Invalid sign" } - if failed
+  public async verifySignature(
+    payload: object
+  ): Promise<{ status: string } | { code: number; error: string }> {
+    const data = JSON.stringify(payload);
+
+    const response = await axios.post(`${this.baseUrl}/signature/check`, data, {
+      headers: this.getApiHeaders(),
+    });
+
+    return response.data;
   }
 
   // TODO:
   public async createPaymentIntent(
-    amount: number,
-    currency: string
-  ): Promise<string> {
-    const data = JSON.stringify({
-      amount,
-      currency,
-      projectId: this.projectId,
-      secretId: this.secretId,
-    });
+    paymentIntent: IAntilopayPaymentIntent
+  ): Promise<AntilopayPaymentIntentResponse> {
+    const response = await axios.post(
+      `${this.baseUrl}/payment/create`,
+      paymentIntent,
+      {
+        headers: this.getApiHeaders(),
+      }
+    );
 
-    const response = await axios.post(`${this.baseUrl}/payment_intents`, data, {
-      headers: this.getApiHeaders(),
-    });
-
-    return response.data.id;
+    return response.data as AntilopayPaymentIntentResponse;
   }
+
+  // TODO:
 }
