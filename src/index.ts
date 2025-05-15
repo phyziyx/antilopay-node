@@ -1,19 +1,17 @@
 /**
  * Antilopay Payment Processor Node.js SDK
  * @module antilopay-node
- * @version 0.0.0
+ * @version 1.0.0
  * @author phyziyx
  * @license MIT
  *
  * This SDK is designed to be used in Node.js (or equivalent environments) only.
  * It is not designed to be used in the browser or in a webview.
- *
- * The SDK is designed to be used with the Antilopay Payment Processor.
  * The API documentation can be found at https://doc.antilopay.com/AntilopayAPI.pdf
  */
 
-import axios from "axios";
-import crypto from "crypto";
+import axios from 'axios';
+import crypto from 'crypto';
 
 //
 //
@@ -25,11 +23,18 @@ import crypto from "crypto";
  * Only 'payment' is supported.
  * The other types are not supported by this SDK.
  */
-type AntilopayPaymentType = "payment" | "withdraw" | "refund" | "popup";
-type AntilopayTransactionStatus = "PENDING" | "SUCCESS" | "FAIL";
-type AntilopayPaymentMethod = "CARD_RU" | "SBP" | "SBER_PAY";
-type AntilopayPaymentCurrency = "RUB";
-type AntilopayProductType = "goods" | "services";
+type AntilopayPaymentType = 'payment' | 'withdraw' | 'refund' | 'popup';
+type AntilopayTransactionStatus =
+  | 'PENDING'
+  | 'SUCCESS'
+  | 'FAIL'
+  | 'CANCEL'
+  | 'EXPIRED'
+  | 'CHARGEBACK'
+  | 'REVERSED';
+type AntilopayPaymentMethod = 'CARD_RU' | 'SBP' | 'SBER_PAY';
+type AntilopayPaymentCurrency = 'RUB';
+type AntilopayProductType = 'goods' | 'services';
 
 interface IAntilopayWebhookResponse {
   type: AntilopayPaymentType;
@@ -105,11 +110,11 @@ interface IAntilopayServiceConstructor {
   projectId: string;
   secretId: string;
   secretKey: string;
-  publicKey: string;
+  callbackKey: string;
 }
 
 interface IAntilopaySignatureCheckResponse {
-  status: "ok";
+  status: 'ok';
 }
 
 interface IAntilopayPaymentIntent {
@@ -209,6 +214,24 @@ interface IAntilopayError {
   error: string;
 }
 
+interface IAntilopayPaymentStatusResponse extends IAntilopayError {
+  payment_id: string;
+  order_id: string;
+  payment_url: string;
+  ctime: string;
+  amount: number;
+  original_amount: number;
+  fee: number;
+  status: AntilopayTransactionStatus;
+  currency: AntilopayPaymentCurrency;
+  product_name: string;
+  description: string;
+  pay_method: AntilopayPaymentMethod;
+  pay_data: string;
+  customer: IAntilopayCustomer;
+  merchant_extra: string;
+}
+
 interface IAntilopayPaymentIntentResponse extends IAntilopayError {
   payment_id: string;
   payment_url: string;
@@ -227,9 +250,13 @@ type AntilopayPaymentIntentResponse =
   | AntilopayPaymentIntentResponsePlain
   | IAntilopayPaymentIntentResponseNSPK;
 
+/**
+ * The customer details for the payment.
+ * You may provide either email or phone or both.
+ */
 interface IAntilopayCustomer {
-  email: string;
-  phone: string;
+  email?: string | null;
+  phone?: string | null;
   address: string;
   ipAddress: string;
   fullName: string;
@@ -242,8 +269,8 @@ interface IAntilopayCustomer {
 //
 
 export class AntilopayCustomer implements IAntilopayCustomer {
-  public email: string;
-  public phone: string;
+  public email?: string | null;
+  public phone?: string | null;
   public address: string;
   public ipAddress: string;
   public fullName: string;
@@ -256,7 +283,7 @@ export class AntilopayCustomer implements IAntilopayCustomer {
     fullName,
   }: IAntilopayCustomer) {
     if (!email && !phone) {
-      throw new Error("Either email or phone must be provided.");
+      throw new Error('Either email or phone must be provided.');
     }
 
     this.email = email;
@@ -284,7 +311,7 @@ export class AntilopayService {
    * The base URL for the Antilopay API.
    * @default "https://lk.antilopay.com/api/v1"
    */
-  private baseUrl: string = "https://lk.antilopay.com/api/v1";
+  private baseUrl: string = 'https://lk.antilopay.com/api/v1';
   /**
    * The API version for the Antilopay API.
    * Used in the API header 'X-Apay-Sign-Version'.
@@ -298,32 +325,38 @@ export class AntilopayService {
    * and is used in the API header 'X-Apay-Sign'.
    * @default "RSA-SHA256"
    */
-  private signingAlgorithm: string = "RSA-SHA256";
+  private signingAlgorithm: string = 'RSA-SHA256';
 
   /**
    * The output format for the signing algorithm.
    * @default "base64"
    */
-  private signingAlgorithmOutput: crypto.BinaryToTextEncoding = "base64";
+  private signingAlgorithmOutput: crypto.BinaryToTextEncoding = 'base64';
 
   /**
    * The project ID for the Antilopay account.
    * This is used to identify the account when making API requests.
    * Used in the API header 'X-Apay-Project-Id'.
    */
-  private projectId: string = "";
+  private projectId: string = '';
   /**
    * The secret ID for the Antilopay account.
+   * This is provided by Antilopay and known as the merchant ID.
+   * Used in the API header 'X-Apay-Secret-Id'.
    */
-  private secretId: string = "";
+  private secretId: string = '';
   /**
    * Antilopay uses RSA keys.  This is a PEM formatted private key.
+   * This is used to sign the API requests. You have received this key from Antilopay.
+   * -----BEGIN RSA PRIVATE KEY-----\n<SECRET KEY>\n-----END RSA PRIVATE KEY-----
    */
-  private privateKey: string = "";
+  private secretKey: string = '';
   /**
    * Antilopay uses RSA keys.  This is a PEM formatted public key.
+   * This is used to verify the Webhook signature. You have received this key from Antilopay.
+   * -----BEGIN PUBLIC KEY-----\n<PUBLIC KEY>\n-----END PUBLIC KEY-----
    */
-  private publicKey: string = "";
+  private callbackKey: string = '';
 
   private constructor() {}
 
@@ -347,12 +380,12 @@ export class AntilopayService {
     projectId,
     secretId,
     secretKey,
-    publicKey,
+    callbackKey,
   }: IAntilopayServiceConstructor): void {
     this.projectId = projectId;
     this.secretId = secretId;
-    this.privateKey = secretKey;
-    this.publicKey = publicKey;
+    this.secretKey = secretKey;
+    this.callbackKey = callbackKey;
   }
 
   /**
@@ -404,32 +437,18 @@ export class AntilopayService {
   }
 
   /**
-   * Get the secret key for the API.
-   * @returns
-   */
-  public getSecretKey(): string {
-    return this.privateKey;
-  }
-
-  /**
-   * Get the public key for the API.
-   * @returns
-   */
-  public getPublicKey(): string {
-    return this.publicKey;
-  }
-
-  /**
    * Get the API headers for the API.
    * @returns
    */
-  public getApiHeaders(payload: object): Record<string, string> {
-    // TODO:
+  public getApiHeaders(payload: object): Record<string, string | number> {
+    const signature = this.generateSignature(payload);
+
     return {
-      "Content-Type": "application/json",
-      "X-Apay-Secret-Id": this.projectId,
-      "X-Apay-Sign-Version": this.apiVersion.toString(),
-      "X-Apay-Sign": this.generateSignature(payload),
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Apay-Secret-Id': this.secretId,
+      'X-Apay-Sign-Version': this.apiVersion,
+      'X-Apay-Sign': signature,
     };
   }
 
@@ -442,12 +461,35 @@ export class AntilopayService {
   private generateSignature(payload: object): string {
     const data = JSON.stringify(payload);
 
-    const sign = crypto.createSign(this.signingAlgorithm);
-    sign.update(data);
-    sign.end();
+    const signature = crypto.createSign(this.signingAlgorithm);
+    signature.update(data);
+    signature.end();
 
-    const signature = sign.sign(this.privateKey, this.signingAlgorithmOutput);
-    return signature;
+    const sign = signature.sign(this.secretKey, this.signingAlgorithmOutput);
+    return sign;
+  }
+
+  /**
+   * Verify the signature for the API request locally.
+   * @param payload The payload to verify, must be a JSON object.
+   * @param signature The signature to verify, found in header as 'X-Apay-Callback'.
+   * @returns {boolean} True if the signature is valid, false otherwise.
+   */
+  public async verifySignature(
+    payload: object,
+    signature: string,
+  ): Promise<boolean> {
+    const data = JSON.stringify(payload);
+
+    const verify = crypto.createVerify(this.signingAlgorithm);
+    verify.update(data);
+    verify.end();
+
+    return verify.verify(
+      this.callbackKey,
+      signature,
+      this.signingAlgorithmOutput,
+    );
   }
 
   /**
@@ -455,13 +497,13 @@ export class AntilopayService {
    * @param payload The payload to verify, must be a JSON object.
    * @returns {IAntilopaySignatureCheckResponse | IAntilopayError}
    */
-  public async verifySignature(
-    payload: object
+  public async verifySignatureRemote(
+    payload: object,
   ): Promise<IAntilopaySignatureCheckResponse | IAntilopayError> {
-    const responseData = await this.post<
-      IAntilopaySignatureCheckResponse | IAntilopayError
-    >(`/signature/check`, payload);
-    return responseData;
+    return await this.post<IAntilopaySignatureCheckResponse | IAntilopayError>(
+      `/signature/check`,
+      payload,
+    );
   }
 
   /**
@@ -493,41 +535,40 @@ export class AntilopayService {
    * });
    */
   public async createPaymentIntent(
-    paymentIntent: IAntilopayPaymentIntent
+    paymentIntent: IAntilopayPaymentIntent,
   ): Promise<AntilopayPaymentIntentResponse> {
+    const payload = {
+      ...paymentIntent,
+      project_identificator: this.projectId,
+    };
+
     const responseData = await this.post<AntilopayPaymentIntentResponse>(
       `/payment/create`,
-      { ...paymentIntent, project_identifier: this.projectId }
+      payload,
     );
 
     return responseData;
   }
 
-  private async isValidWebhookSignature(
-    payload: object,
-    signature: string
-  ): Promise<boolean> {
-    const data = JSON.stringify(payload);
-    const verify = crypto.createVerify(this.signingAlgorithm);
-    verify.update(data);
-    return verify.verify(
-      this.publicKey,
-      signature,
-      this.signingAlgorithmOutput
+  /**
+   * Get the payment status for a payment.
+   * @param orderid The order identifier for the payment.
+   * @returns {Promise<IAntilopayPaymentStatusResponse>} The payment status response.
+   */
+  public async getPaymentStatus(
+    orderid: string,
+  ): Promise<IAntilopayPaymentStatusResponse> {
+    const payload = {
+      project_identificator: this.projectId,
+      order_id: orderid,
+    };
+
+    const responseData = await this.post<IAntilopayPaymentStatusResponse>(
+      `/payment/check`,
+      payload,
     );
 
-    // const data = JSON.stringify(payload);
-    // // Let us first verify if the webhook content is valid
-    // // get the rawSign by decrypting the signature from Base64
-    // const rawSign = Buffer.from(
-    //   signature,
-    //   this.signingAlgorithmOutput
-    // ).toString("utf8");
-    // // verify the signature
-    // const verify = crypto.createVerify(this.signingAlgorithm);
-    // verify.update(data);
-    // verify.end();
-    // return verify.verify(this.publicKey, rawSign);
+    return responseData;
   }
 
   /**
@@ -535,22 +576,24 @@ export class AntilopayService {
    * @param payload The payload to process, must be a JSON object.
    * @param signature The signature to verify, found in header as 'X-Apay-Callback'.
    * @throws {Error} If the signature is invalid.
-   * @returns {IAntilopayWebhookResponse} The webhook response, if valid.
+   * @returns {Promise<IAntilopayWebhookResponse>} The webhook response, if valid.
    */
-  public async processWebhook(payload: object, signature: string) {
-    if (!this.isValidWebhookSignature(payload, signature)) {
-      throw new Error("Invalid webhook signature");
+  public async processWebhook(
+    payload: object,
+    signature: string,
+  ): Promise<IAntilopayWebhookResponse> {
+    const response = await this.verifySignature(payload, signature);
+
+    if (!response) {
+      throw new Error('Invalid webhook signature');
     }
 
     return payload as IAntilopayWebhookResponse;
   }
 
-  private async post<T>(endpoint: string, payload: object) {
+  private async post<T>(endpoint: string, payload: object): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-
-    const headers = {
-      ...this.getApiHeaders(payload),
-    };
+    const headers = this.getApiHeaders(payload);
 
     const response = await axios.post(url, payload, {
       headers,

@@ -1,9 +1,17 @@
 {
   "name": "antilopay-node",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Node.js SDK for Antilopay payment processor.",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "scripts": {
+    "build": "tsup",
+    "ci": "npm run build && npm run check-format && npm run check-exports && npm run lint",
+    "format": "prettier --write .",
+    "check-format": "prettier --check .",
+    "lint": "tsc",
+    "check-exports": "attw --pack . --ignore-rules=cjs-resolves-to-esm",
+    "local-release": "changeset version && changeset publish",
+    "prepublishOnly": "npm run ci",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -23,6 +31,22 @@
     "axios": "1.9.0"
   },
   "devDependencies": {
-    "@types/node": "^22.15.17"
-  }
+    "@arethetypeswrong/cli": "^0.18.1",
+    "@changesets/cli": "^2.29.4",
+    "@types/node": "^22.15.17",
+    "prettier": "^3.5.3",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.3"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": "./dist/index.js",
+      "default": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module"
 }
