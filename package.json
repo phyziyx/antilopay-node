@@ -21,6 +21,9 @@
   "keywords": [
     "antilopay"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "phyziyx",
   "license": "MIT",
   "bugs": {
