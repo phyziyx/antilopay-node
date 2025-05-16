@@ -4,7 +4,7 @@ A TypeScript first SDK is designed to be used in Node.js (or equivalent environm
 
 ## Installation
 
-```npm i antilopay-node```
+`npm i antilopay-node`
 
 ## Features
 
