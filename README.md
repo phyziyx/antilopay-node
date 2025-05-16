@@ -1,6 +1,6 @@
 # Antilopay Node.js SDK
 
-A TypeScript first SDK is designed to be used in Node.js (or equivalent environments) for Antilopay payment processor.
+A TypeScript first SDK designed to be used in Node.js (or equivalent environments) for Antilopay payment processor.
 
 ## Installation
 
@@ -11,13 +11,12 @@ A TypeScript first SDK is designed to be used in Node.js (or equivalent environm
 - [x] Payment Creation
 - [x] Payment Information
 - [x] Webhook Notification
-- [ ] Payment cancellation
-- [ ] Withdraw creation
-- [ ] Withdraw information
-- [ ] Refund creation
-- [ ] Refund information
-- [ ] Project balance
-- [ ] Error codes
+- [x] Payment Cancellation
+- [x] Withdraw Creation
+- [x] Withdraw Information
+- [x] Refund Creation
+- [x] Refund Information
+- [x] Project Balance
 
 ## Example
 
