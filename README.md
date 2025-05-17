@@ -2,6 +2,8 @@
 
 A TypeScript first SDK designed to be used in Node.js (or equivalent environments) for Antilopay payment processor.
 
+[![CI](https://github.com/phyziyx/antilopay-node/actions/workflows/ci.yml/badge.svg)](https://github.com/phyziyx/antilopay-node/actions/workflows/ci.yml)
+
 ## Installation
 
 `npm i antilopay-node`
