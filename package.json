@@ -12,7 +12,10 @@
     "check-exports": "attw --pack . --ignore-rules=cjs-resolves-to-esm",
     "local-release": "changeset version && changeset publish",
     "prepublishOnly": "npm run ci",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:run": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -31,15 +34,16 @@
   },
   "homepage": "https://github.com/phyziyx/antilopay-node#readme",
   "dependencies": {
-    "axios": "1.9.0"
+    "axios": "^1.13.2"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.1",
     "@changesets/cli": "^2.29.4",
     "@types/node": "^22.15.17",
-    "prettier": "^3.5.3",
-    "tsup": "^8.4.0",
-    "typescript": "^5.8.3"
+    "prettier": "^3.7.4",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   },
   "exports": {
     "./package.json": "./package.json",

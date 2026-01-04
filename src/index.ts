@@ -781,7 +781,7 @@ export class AntilopayService {
       order_id: orderId,
     };
 
-    const responseData = await this.post<IAntilopayRefundResponse>(
+    const responseData = await this.post<IAntilopayRefundStatusResponse>(
       `/refund/check`,
       payload,
     );

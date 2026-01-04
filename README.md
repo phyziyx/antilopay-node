@@ -4,6 +4,21 @@ A TypeScript first SDK designed to be used in Node.js (or equivalent environment
 
 [![CI](https://github.com/phyziyx/antilopay-node/actions/workflows/ci.yml/badge.svg)](https://github.com/phyziyx/antilopay-node/actions/workflows/ci.yml)
 
+## Testing
+
+Run the test suite with Vitest after installing dev dependencies:
+
+```bash
+npm install
+npm test
+```
+
+For watch mode use:
+
+```bash
+npm run test:watch
+```
+
 ## Installation
 
 `npm i antilopay-node`
