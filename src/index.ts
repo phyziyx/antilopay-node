@@ -54,7 +54,7 @@ export interface IAntilopayBalance {
 }
 
 export interface IAntilopayProjectBalanceResponse extends IAntilopayError {
-  project_indentificator: string;
+  project_identificator: string;
   rub: IAntilopayBalance;
   usd?: IAntilopayBalance;
 }
