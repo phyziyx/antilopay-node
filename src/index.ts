@@ -224,7 +224,14 @@ export interface IAntilopayPaymentIntent {
 }
 
 export interface IAntilopayPaymentIntentParams {
+  /**
+   * If NSPK is enabled, you receive a SBP link to perform the payments at.
+   */
   direct_nspk: boolean;
+  /**
+   * If captcha is enabled, the buyer will need to complete the CAPTCHA on the payment page.
+   */
+  use_captcha: boolean;
 }
 
 export interface IAntilopayError {
@@ -634,6 +641,7 @@ export class AntilopayService {
    *   merchant_extra: 'Test Merchant Extra',
    *   params: {
    *     direct_nspk: true,
+   *     use_captcha: false,
    *   },
    * });
    */
@@ -741,7 +749,7 @@ export class AntilopayService {
 
   /**
    * Get the payout status.
-   * @param withdrawId The withdraw identifier for the payment.
+   * @param transactionId The transaction identifier to create a refund for.
    * @param orderId The order identifier for the payment.
    * @returns {Promise<IAntilopayRefundResponse>} The payout status response.
    */
@@ -767,7 +775,7 @@ export class AntilopayService {
 
   /**
    * Get the refund status.
-   * @param refundId The transaction identifier for the refund.
+   * @param refundId The refund identifier.
    * @param orderId The order identifier for the payment.
    * @returns {Promise<AntilopayRefundStatusResponse>} The refund status response.
    */
