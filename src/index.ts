@@ -543,7 +543,7 @@ export class AntilopayService {
    * Get the API headers for the API.
    * @returns
    */
-  public getApiHeaders(payload: object): Record<string, string | number> {
+  private getApiHeaders(payload: object): Record<string, string | number> {
     const signature = this.generateSignature(payload);
 
     return {

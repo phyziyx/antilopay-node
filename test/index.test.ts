@@ -29,6 +29,23 @@ describe('AntilopayCustomer', () => {
 });
 
 describe('AntilopayService', () => {
+  it('should create a client with valid configuration', () => {
+    const service = AntilopayService.getInstance();
+
+    service.init({
+      secretKey: 'secret',
+      callbackKey: 'callback',
+      projectId: 'project',
+      secretId: 'secretId',
+    });
+    service.setApiVersion(2);
+
+    expect(service).toBeInstanceOf(AntilopayService);
+    expect(service.getProjectId()).toBe('project');
+    expect(service.getSecretId()).toBe('secretId');
+    expect(service.getApiVersion()).toBe(2);
+  });
+
   it('singleton getInstance returns same instance and default baseUrl', () => {
     const a = AntilopayService.getInstance();
     const b = AntilopayService.getInstance();
