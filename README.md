@@ -4,26 +4,9 @@ A TypeScript first SDK designed to be used in Node.js (or equivalent environment
 
 [![CI](https://github.com/phyziyx/antilopay-node/actions/workflows/ci.yml/badge.svg)](https://github.com/phyziyx/antilopay-node/actions/workflows/ci.yml)
 
-## Testing
-
-Run the test suite with Vitest after installing dev dependencies:
-
-```bash
-npm install
-npm test
-```
-
-For watch mode use:
-
-```bash
-npm run test:watch
-```
-
-## Installation
-
-`npm i antilopay-node`
-
 ## Features
+
+This SDK implements all(\*) the features outlined in their API document up-to version 1.39 (dated 23.01.2026):
 
 - [x] Payment Creation
 - [x] Payment Information
@@ -34,17 +17,24 @@ npm run test:watch
 - [x] Refund Creation
 - [x] Refund Information
 - [x] Project Balance
+- [ ] Steam Top-up
+
+(\*) The only exception being the Steam top-up - you're more than welcome to create a PR if you need this feature.
+
+## Installation
+
+`npm i antilopay-node`
 
 ## Example
 
 ```ts
 const antilopay = AntilopayService.getInstance();
 
-// Reading your secrets from an environment or a file...
-const secretKey: string = fs.readFileSync("secretKey.txt", "utf-8");
-const callbackKey: string = fs.readFileSync("callbackKey.txt", "utf-8");
-const projectId: string = fs.readFileSync("projectId.txt", "utf-8");
-const secretId: string = fs.readFileSync("secretId.txt", "utf-8");
+// Reading your secrets from an environment or a secret manager
+const secretKey: string = process.env.SECRET_KEY;
+const callbackKey: string = process.env.CALLBACK_KEY;
+const projectId: string = process.env.PROJECT_ID;
+const secretId: string = process.env.SECRET_ID;
 
 // Setting up the Antilopay
 antilopay.init({
@@ -81,23 +71,44 @@ const paymentIntent = await antilopay.createPaymentIntent({
   vat: 0,
 });
 
-// Payment intent response may something look like this:
-{
-  code: 0,
-  payment_id: 'APAYXXXXXXXXXXXXXXXXXXXXX',
-  direct_nspk: true,
-  payment_url: 'https://qr.nspk.ru/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-  transaction_id: 'APAYXXXXXXXXXXXXXXXXXXXXXT705C074C07A4375F'
-}
+if (paymentIntent.code !== 0) {
+  // Failure! An error occurred...
+  console.error(paymentIntent.error);
+} else {
+  // Success!
+  // Payment intent response may something look like this:
+  {
+    code: 0,
+    payment_id: 'APAYXXXXXXXXXXXXXXXXXXXXX',
+    direct_nspk: true,
+    payment_url: 'https://qr.nspk.ru/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    transaction_id: 'APAYXXXXXXXXXXXXXXXXXXXXXT705C074C07A4375F'
+  }
 
-// Getting the payment status
-const paymentStatus = await antilopay.getPaymentStatus("TEST1747319801189");
+  // Getting the payment status
+  const paymentStatus = await antilopay.getPaymentStatus("TEST1747319801189");
 
-// The payment status response may look like this:
-{
-  amount: 9.65,
-  original_amount: 10,
-  fee: 0,
-  // ... other details of the original payment
+  // The payment status response may look like this:
+  {
+    amount: 9.65,
+    original_amount: 10,
+    fee: 0,
+    // ... other details of the original payment
+  }
 }
+```
+
+## Testing
+
+Run the test suite with Vitest after installing dev dependencies:
+
+```bash
+npm install
+npm test
+```
+
+For watch mode use:
+
+```bash
+npm run test:watch
 ```
