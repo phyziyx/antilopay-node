@@ -10,7 +10,7 @@
  * The API documentation can be found at https://doc.antilopay.com/AntilopayAPI.pdf
  */
 
-import axios from 'axios';
+import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import crypto from 'crypto';
 
 //
@@ -624,6 +624,10 @@ export class AntilopayService {
    */
   private callbackKey: string = '';
 
+  // Axios instance used for all HTTP requests
+  private axiosInstance?: AxiosInstance;
+  private interceptorsAttached: boolean = false;
+
   private constructor() {}
 
   /**
@@ -639,6 +643,81 @@ export class AntilopayService {
   }
 
   /**
+   * Lazy getter for the axios instance. Ensures base URL, timeout and interceptors
+   * are configured with the current service settings.
+   */
+  private getAxios(): AxiosInstance {
+    if (!this.axiosInstance) {
+      this.axiosInstance = axios.create({
+        baseURL: this.baseUrl,
+        timeout: this.timeout,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      });
+
+      this.attachInterceptors();
+    } else {
+      // keep instance in sync with possibly updated config
+      this.axiosInstance.defaults.baseURL = this.baseUrl;
+      this.axiosInstance.defaults.timeout = this.timeout;
+    }
+
+    return this.axiosInstance;
+  }
+
+  /**
+   * Attach request and response interceptors to the axios instance.
+   */
+  private attachInterceptors(): void {
+    if (!this.axiosInstance || this.interceptorsAttached) return;
+
+    // Request interceptor: merge API headers and compute signature when needed
+    this.axiosInstance.interceptors.request.use(
+      (config) => {
+        config.headers = config.headers || {};
+
+        const payload = config.data;
+
+        // Compute and merge headers for this request
+        const apiHeaders = this.getApiHeaders(
+          payload && typeof payload === 'object' ? payload : undefined,
+        );
+
+        for (const key of Object.keys(apiHeaders)) {
+          config.headers[key] = apiHeaders[key as keyof typeof apiHeaders];
+        }
+
+        return config;
+      },
+      (error) => Promise.reject(error),
+    );
+
+    // Response interceptor: normalize errors for consumers
+    this.axiosInstance.interceptors.response.use(
+      (response: AxiosResponse) => response,
+      (error) => {
+        if (error && error.response) {
+          const resp = error.response as AxiosResponse;
+          const message =
+            resp.data && resp.data.error
+              ? resp.data.error
+              : resp.statusText || 'Request failed';
+          const err: any = new Error(message);
+          err.status = resp.status;
+          err.data = resp.data;
+          return Promise.reject(err);
+        }
+
+        return Promise.reject(error);
+      },
+    );
+
+    this.interceptorsAttached = true;
+  }
+
+  /**
    * Initialise the Antilopay Service singleton with the credentials.
    * @param config The configuration for the Antilopay Service.
    */
@@ -649,6 +728,9 @@ export class AntilopayService {
     this.callbackKey = config.callbackKey;
 
     this.timeout ??= config.timeout;
+    if (this.axiosInstance) {
+      this.axiosInstance.defaults.timeout = this.timeout;
+    }
   }
 
   /**
@@ -657,6 +739,7 @@ export class AntilopayService {
    */
   public setBaseUrl(url: string): void {
     this.baseUrl = url;
+    if (this.axiosInstance) this.axiosInstance.defaults.baseURL = url;
   }
 
   /**
@@ -673,6 +756,12 @@ export class AntilopayService {
    */
   public setApiVersion(version: number): void {
     this.apiVersion = version;
+    if (this.axiosInstance)
+      this.axiosInstance.defaults.headers =
+        this.axiosInstance.defaults.headers || {};
+    if (this.axiosInstance)
+      (this.axiosInstance.defaults.headers as any)['X-Apay-Sign-Version'] =
+        version;
   }
 
   /**
@@ -1042,25 +1131,17 @@ export class AntilopayService {
   }
 
   private async post<T>(endpoint: string, payload: object): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.getApiHeaders(payload);
+    const client = this.getAxios();
 
-    const response = await axios.post(url, payload, {
-      headers,
-      timeout: this.timeout,
-    });
+    const response = await client.post(endpoint, payload as any);
 
     return response.data as T;
   }
 
   private async get<T>(endpoint: string): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.getApiHeaders();
+    const client = this.getAxios();
 
-    const response = await axios.get(url, {
-      headers,
-      timeout: this.timeout,
-    });
+    const response = await client.get(endpoint as any);
 
     return response.data as T;
   }
