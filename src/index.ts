@@ -1,7 +1,7 @@
 /**
  * Antilopay Payment Processor Node.js SDK
  * @module antilopay-node
- * @version 1.1.0
+ * @version 2.0.0
  * @author phyziyx
  * @license MIT
  *
