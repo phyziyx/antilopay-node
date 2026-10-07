@@ -1,6 +1,6 @@
 {
   "name": "antilopay-node",
-  "version": "1.1.0",
+  "version": "2.1.0",
   "description": "Node.js SDK for Antilopay payment processor.",
   "main": "dist/index.js",
   "scripts": {
@@ -34,14 +34,14 @@
   },
   "homepage": "https://github.com/phyziyx/antilopay-node#readme",
   "dependencies": {
-    "axios": "^1.13.2"
+    "axios": "^1.20.0"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.1",
-    "@changesets/cli": "^2.29.4",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^3.0.3",
     "@types/node": "^22.15.17",
-    "@vitest/coverage-v8": "^4.0.16",
-    "prettier": "^3.7.4",
+    "@vitest/coverage-v8": "^4.1.11",
+    "prettier": "^3.9.9",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
