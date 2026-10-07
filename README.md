@@ -8,20 +8,21 @@ A TypeScript first SDK designed to be used in Node.js (or equivalent environment
 
 ## Features
 
-This SDK implements all(\*) the features outlined in their API document up-to version 1.39 (dated 23.01.2026):
+This SDK implements all the features outlined in their API document up-to version 1.53 (dated 25.09.2026):
 
-- [x] Payment Creation
-- [x] Payment Information
-- [x] Webhook Notification
-- [x] Payment Cancellation
-- [x] Withdraw Creation
+- [x] Payment Creation (incl. recurrent payments, `direct_nspk`, `use_captcha`, `skip_success_page`)
+- [x] Payment Information (incl. refunds)
+- [x] Recurring Payment Information & Cancellation
+- [x] Webhook Notification (payment, withdraw, refund, steam top-up)
+- [x] Payment Cancellation (reverse)
+- [x] Withdraw Creation (incl. SBP, merchant `comment`)
 - [x] Withdraw Information
+- [x] Withdraw Rate
 - [x] Refund Creation
 - [x] Refund Information
-- [x] Project Balance
-- [ ] Steam Top-up
-
-(\*) The only exception being the Steam top-up - you're more than welcome to create a PR if you need this feature.
+- [x] Project Balance (v1 and v2, single project and all projects)
+- [x] Steam Top-up (account check, creation, status)
+- [x] Signature Verification (local, remote, and for payouts)
 
 ## Installation
 
@@ -70,33 +71,30 @@ const paymentIntent = await antilopay.createPaymentIntent({
   },
   prefer_methods: ["CARD_RU", "SBP", "SBER_PAY"],
   product_quantity: 1,
-  vat: 0,
 });
 
-if (paymentIntent.code !== 0) {
-  // Failure! An error occurred...
-  console.error(paymentIntent.error);
-} else {
-  // Success!
-  // Payment intent response may something look like this:
-  {
-    code: 0,
-    payment_id: 'APAYXXXXXXXXXXXXXXXXXXXXX',
-    direct_nspk: true,
-    payment_url: 'https://qr.nspk.ru/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-    transaction_id: 'APAYXXXXXXXXXXXXXXXXXXXXXT705C074C07A4375F'
-  }
+// The SDK throws `AntilopayApiError` whenever the API responds with a
+// non-zero code or an HTTP error occurs — a successful response means
+// `code` was 0.
+//
+// Payment intent response may something look like this:
+{
+  payment_id: 'APAYXXXXXXXXXXXXXXXXXXXXX',
+  direct_nspk: true,
+  payment_url: 'https://qr.nspk.ru/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+  transaction_id: 'APAYXXXXXXXXXXXXXXXXXXXXXT705C074C07A4375F'
+}
 
-  // Getting the payment status
-  const paymentStatus = await antilopay.getPaymentStatus("TEST1747319801189");
+// Getting the payment status
+const paymentStatus = await antilopay.getPaymentStatus("TEST1747319801189");
 
-  // The payment status response may look like this:
-  {
-    amount: 9.65,
-    original_amount: 10,
-    fee: 0,
-    // ... other details of the original payment
-  }
+// The payment status response may look like this:
+{
+  amount: 9.65,
+  original_amount: 10,
+  fee: 0,
+  refunds: [], // refunds of the payment, when there are any
+  // ... other details of the original payment
 }
 ```
 
