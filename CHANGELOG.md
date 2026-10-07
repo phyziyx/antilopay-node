@@ -1,5 +1,11 @@
 # antilopay-node
 
+## 2.0.1
+
+### Patch Changes
+
+- 5e71f83: Corrected the release
+
 ## 2.0.0
 
 ### Major Changes
