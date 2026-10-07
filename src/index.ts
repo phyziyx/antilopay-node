@@ -42,16 +42,10 @@ export type AntilopayPaymentMethod = 'CARD_RU' | 'CARD_BY' | 'SBP' | 'SBER_PAY';
 export type AntilopayPaymentCurrency = 'RUB';
 export type AntilopayProductType = 'goods' | 'services';
 export type AntilopayPayoutMethod =
-  | 'CARD_RU'
-  | 'QIWI'
-  | 'CRYPTO_TRON_USDT'
-  | 'STEAM';
+  'CARD_RU' | 'QIWI' | 'CRYPTO_TRON_USDT' | 'STEAM';
 export type AntilopayFeeType = 'BALANCE' | 'ORDER';
 export type AntilopayPayoutStatus =
-  | 'PENDING'
-  | 'WAIT_ANSWER'
-  | 'FAIL'
-  | 'COMPLETE';
+  'PENDING' | 'WAIT_ANSWER' | 'FAIL' | 'COMPLETE';
 
 export interface IAntilopayBalance {
   available: number;
@@ -453,8 +447,7 @@ type IAntilopayPaymentIntentResponseNSPK = IAntilopayPaymentIntentResponse & {
 };
 
 export type AntilopayPaymentIntentResponse =
-  | AntilopayPaymentIntentResponsePlain
-  | IAntilopayPaymentIntentResponseNSPK;
+  AntilopayPaymentIntentResponsePlain | IAntilopayPaymentIntentResponseNSPK;
 
 export interface IAntilopayPayout {
   /**
