@@ -10,7 +10,6 @@
  * The API documentation can be found at https://doc.antilopay.com/AntilopayAPI.pdf
  */
 
-import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import crypto from 'crypto';
 
 //
@@ -1148,10 +1147,6 @@ export class AntilopayService {
    */
   private lastRequestId?: string | undefined = undefined;
 
-  // Axios instance used for all HTTP requests
-  private axiosInstance?: AxiosInstance;
-  private interceptorsAttached: boolean = false;
-
   private constructor() {}
 
   /**
@@ -1164,122 +1159,6 @@ export class AntilopayService {
     }
 
     return this.instance;
-  }
-
-  /**
-   * Lazy getter for the axios instance. Ensures base URL, timeout and interceptors
-   * are configured with the current service settings.
-   */
-  private getAxios(): AxiosInstance {
-    if (!this.axiosInstance) {
-      this.axiosInstance = axios.create({
-        baseURL: this.baseUrl,
-        timeout: this.timeout,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-      });
-
-      this.attachInterceptors();
-    } else {
-      // keep instance in sync with possibly updated config
-      this.axiosInstance.defaults.baseURL = this.baseUrl;
-      this.axiosInstance.defaults.timeout = this.timeout;
-    }
-
-    return this.axiosInstance;
-  }
-
-  /**
-   * Attach request and response interceptors to the axios instance.
-   */
-  private attachInterceptors(): void {
-    if (!this.axiosInstance || this.interceptorsAttached) return;
-
-    // Request interceptor: merge API headers and compute signature when needed
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        config.headers = config.headers || {};
-
-        const payload = config.data;
-        const url = typeof config.url === 'string' ? config.url : '';
-
-        // Payout requests are signed with the dedicated payout secret key
-        // (falls back to the merchant secret key when it is not set).
-        const signingKey = AntilopayService.WITHDRAW_ENDPOINTS.some(
-          (endpoint) => url.includes(endpoint),
-        )
-          ? this.withdrawSecretKey || this.secretKey
-          : this.secretKey;
-
-        // Compute and merge headers for this request
-        const apiHeaders = this.getApiHeaders(
-          payload && typeof payload === 'object' ? payload : undefined,
-          signingKey,
-        );
-
-        for (const key of Object.keys(apiHeaders)) {
-          config.headers[key] = apiHeaders[key as keyof typeof apiHeaders];
-        }
-
-        return config;
-      },
-      (error) => Promise.reject(error),
-    );
-
-    // Response interceptor: check API error codes and normalize transport errors
-    this.axiosInstance.interceptors.response.use(
-      (response: AxiosResponse) => {
-        this.captureRequestId(response && response.headers);
-
-        const data = response && (response.data as any);
-
-        if (
-          data &&
-          typeof data === 'object' &&
-          typeof data.code === 'number' &&
-          data.code !== 0
-        ) {
-          // API-level error (business logic)
-          const msg = data.error || 'Antilopay API returned an error';
-          return Promise.reject(
-            new AntilopayApiError(data.code, msg, data, this.lastRequestId),
-          );
-        }
-
-        return response;
-      },
-      (error) => {
-        // Transport / HTTP error
-        if (error && error.response) {
-          const resp = error.response as AxiosResponse;
-          this.captureRequestId(resp.headers);
-
-          const data = resp.data as any;
-          const apiCode =
-            data && typeof data.code === 'number' ? data.code : resp.status;
-          const message =
-            (data && data.error) || resp.statusText || 'Request failed';
-
-          return Promise.reject(
-            new AntilopayApiError(
-              apiCode,
-              message,
-              data || { status: resp.status },
-              this.lastRequestId,
-            ),
-          );
-        }
-
-        // Unknown error (e.g., network failure)
-        return Promise.reject(
-          new AntilopayApiError(-1, error?.message || 'Network error', null),
-        );
-      },
-    );
-
-    this.interceptorsAttached = true;
   }
 
   /**
@@ -1324,9 +1203,6 @@ export class AntilopayService {
     if (config.timeout !== undefined) {
       this.timeout = config.timeout;
     }
-    if (this.axiosInstance) {
-      this.axiosInstance.defaults.timeout = this.timeout;
-    }
   }
 
   /**
@@ -1361,7 +1237,6 @@ export class AntilopayService {
    */
   public setBaseUrl(url: string): void {
     this.baseUrl = url;
-    if (this.axiosInstance) this.axiosInstance.defaults.baseURL = url;
   }
 
   /**
@@ -1917,36 +1792,131 @@ export class AntilopayService {
     return this.baseUrl.replace('/api/v1', '/api/v2');
   }
 
+  private async request<T>(
+    method: 'GET' | 'POST',
+    url: string,
+    payload?: object,
+  ): Promise<T> {
+    const signable =
+      payload && typeof payload === 'object' ? payload : undefined;
+
+    // Payout requests are signed with the dedicated payout secret key
+    // (falls back to the merchant secret key when it is not set).
+    const signingKey = AntilopayService.WITHDRAW_ENDPOINTS.some((endpoint) =>
+      url.includes(endpoint),
+    )
+      ? this.withdrawSecretKey || this.secretKey
+      : this.secretKey;
+
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(
+      this.getApiHeaders(signable, signingKey),
+    )) {
+      headers[key] = String(value);
+    }
+
+    const controller = new AbortController();
+    const timer =
+      this.timeout !== undefined
+        ? setTimeout(() => controller.abort(), this.timeout)
+        : undefined;
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body: signable ? JSON.stringify(signable) : undefined,
+        signal: controller.signal,
+      });
+
+      this.captureRequestId(response.headers);
+
+      const text = await response.text();
+      if (!text)
+        throw new AntilopayApiError(
+          response.status,
+          'Empty response from Antilopay API',
+          null,
+          this.lastRequestId,
+        );
+
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+
+      if (response.ok) {
+        if (
+          data &&
+          typeof data === 'object' &&
+          typeof data.code === 'number' &&
+          data.code !== 0
+        ) {
+          // API-level error (business logic)
+          const msg = data.error || 'Antilopay API returned an error';
+          throw new AntilopayApiError(data.code, msg, data, this.lastRequestId);
+        }
+
+        return data as T;
+      }
+
+      // Transport / HTTP error
+      const apiCode =
+        data && typeof data.code === 'number' ? data.code : response.status;
+      const message =
+        (data && typeof data === 'object' && data.error) ||
+        response.statusText ||
+        'Request failed';
+
+      throw new AntilopayApiError(
+        apiCode,
+        message,
+        data || { status: response.status },
+        this.lastRequestId,
+      );
+    } catch (error) {
+      // Re-throw API errors untouched; normalize transport / abort errors.
+      if (error instanceof AntilopayApiError) throw error;
+
+      throw new AntilopayApiError(
+        -1,
+        error instanceof Error && error.message
+          ? error.message
+          : 'Network error',
+        null,
+      );
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
   private async post<T>(endpoint: string, payload: object): Promise<T> {
-    const client = this.getAxios();
-
-    const response = await client.post(endpoint, payload as any);
-
-    return response.data as T;
+    return this.request<T>('POST', this.resolveUrl(endpoint), payload);
   }
 
   /**
-   * POST against an explicit base URL (absolute URLs override the axios
-   * base URL) — used by the V2 API.
+   * POST against an explicit base URL — used by the V2 API.
    */
   private async postTo<T>(
     baseUrl: string,
     endpoint: string,
     payload: object,
   ): Promise<T> {
-    const client = this.getAxios();
     const url = `${baseUrl.replace(/\/+$/, '')}${endpoint}`;
 
-    const response = await client.post(url, payload as any);
-
-    return response.data as T;
+    return this.request<T>('POST', url, payload);
   }
 
   private async get<T>(endpoint: string): Promise<T> {
-    const client = this.getAxios();
+    return this.request<T>('GET', this.resolveUrl(endpoint));
+  }
 
-    const response = await client.get(endpoint as any);
-
-    return response.data as T;
+  /**
+   * Combine the configured base URL with an endpoint path.
+   */
+  private resolveUrl(endpoint: string): string {
+    return `${this.baseUrl.replace(/\/+$/, '')}${endpoint}`;
   }
 }
